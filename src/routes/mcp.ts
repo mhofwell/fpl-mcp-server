@@ -120,9 +120,53 @@ router.get('/', async (req: Request, res: Response) => {
     }
 });
 
-// Similar pattern for DELETE route
+// Handle DELETE requests for terminating sessions
 router.delete('/', async (req: Request, res: Response) => {
-    // Same pattern as above...
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+    if (!sessionId) {
+        return res.status(400).json({
+            jsonrpc: '2.0',
+            error: {
+                code: -32000,
+                message: 'Missing session ID',
+            },
+            id: null,
+        });
+    }
+
+    const transport = getTransport(sessionId);
+
+    if (!transport) {
+        return res.status(400).json({
+            jsonrpc: '2.0',
+            error: {
+                code: -32001,
+                message: 'Invalid session ID',
+            },
+            id: null,
+        });
+    }
+
+    try {
+        await transport.handleRequest(req, res, req.body);
+        // Close the transport instead of trying to remove it directly
+        await transport.close();
+        console.log(`Session ${sessionId} terminated`);
+    } catch (error) {
+        console.error('Error handling DELETE request:', error);
+        // Only send error if headers haven't been sent
+        if (!res.headersSent) {
+            res.status(500).json({
+                jsonrpc: '2.0',
+                error: {
+                    code: -32603,
+                    message: 'Internal server error',
+                },
+                id: null,
+            });
+        }
+    }
 });
 
 export default router;

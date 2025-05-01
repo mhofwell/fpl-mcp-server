@@ -3,6 +3,10 @@ import express from 'express';
 import cors from 'cors';
 import { config } from './config';
 import mcpRouter from './routes/mcp';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerTools } from './tools';
+import { registerResources } from './resources';
+import { registerPrompts } from './prompts';
 
 const app = express();
 const port = config.port || 3001;
@@ -11,7 +15,7 @@ const port = config.port || 3001;
 // In server.ts
 app.use(
     cors({
-        origin: [config.nextjsUrl, 'https://your-nextjs-app.railway.app'],
+        origin: [config.nextjsUrl, 'http://localhost:3000', 'http://localhost:8080'],
         methods: ['GET', 'POST', 'DELETE'],
         allowedHeaders: ['Content-Type', 'mcp-session-id'],
         exposedHeaders: ['mcp-session-id'],
@@ -32,3 +36,18 @@ app.use('/mcp', mcpRouter);
 app.listen(port, () => {
     console.log(`FPL MCP Server running on port ${port}`);
 });
+
+// Create MCP server
+export const createMcpServer = () => {
+  const server = new McpServer({
+    name: 'FPL-MCP-Server',
+    version: '1.0.0',
+  });
+
+  // Register all components
+  registerTools(server);
+  registerResources(server);
+  registerPrompts(server);
+
+  return server;
+};
