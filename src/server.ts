@@ -1,43 +1,34 @@
+// fpl-mcp-server/src/server.ts
 import express from 'express';
-import routes from './routes/index';
+import cors from 'cors';
+import { config } from './config';
+import mcpRouter from './routes/mcp';
 
-// Create Express application
 const app = express();
-const port = process.env.PORT || 3000;
+const port = config.port || 3001;
 
-// Middleware to parse JSON bodies
-app.use(express.json());
-
-// Use routes
-app.use('/', routes);
-
-// Error handling middleware
+// CORS middleware
+// In server.ts
 app.use(
-    (
-        err: Error,
-        req: express.Request,
-        res: express.Response,
-        next: express.NextFunction
-    ) => {
-        console.error(err.stack);
-        res.status(500).json({
-            message: 'An unexpected error occurred',
-            error: process.env.NODE_ENV === 'production' ? {} : err.stack,
-        });
-    }
+    cors({
+        origin: [config.nextjsUrl, 'https://your-nextjs-app.railway.app'],
+        methods: ['GET', 'POST', 'DELETE'],
+        allowedHeaders: ['Content-Type', 'mcp-session-id'],
+        exposedHeaders: ['mcp-session-id'],
+    })
 );
 
-// Start the server
-const server = app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
+// Middleware
+app.use(express.json());
+
+// Routes
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'OK' });
 });
 
-// For graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received: closing HTTP server');
-    server.close(() => {
-        console.log('HTTP server closed');
-    });
-});
+app.use('/mcp', mcpRouter);
 
-export default app;
+// Start server
+app.listen(port, () => {
+    console.log(`FPL MCP Server running on port ${port}`);
+});
