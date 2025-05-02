@@ -16,7 +16,12 @@ const getRedisClient = () => {
     console.log(`Initializing Redis in ${config.appEnv} mode`);
 
     // Create and return Redis client
-    const client = new Redis(redisUrl);
+    // In redis-client.ts
+    const client = new Redis(redisUrl, {
+        commandTimeout: 5000, // 5 second timeout for Redis commands
+        enableOfflineQueue: false, // Don't queue commands when disconnected
+        maxRetriesPerRequest: 2, // Limit retries to reduce hang time
+    });
 
     // Log connection status based on environment
     client.on('error', (err) => {

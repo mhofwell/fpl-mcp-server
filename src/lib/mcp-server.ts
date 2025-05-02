@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import redis from './redis/redis-client';
 import { Team, Player, Gameweek, Fixture } from '../types/fpl';
 
-// In-memory session storage (will be replaced with Redis later)
+// In-memory session storage (with Redis backup)
 const sessions: Record<string, StreamableHTTPServerTransport> = {};
 
 // Create MCP server
@@ -247,33 +247,81 @@ export const createMcpServer = () => {
 };
 
 // Create a new transport for a session
-export const createTransport = (
+export const createTransport = async (
     sessionId: string = randomUUID()
-): StreamableHTTPServerTransport => {
+): Promise<StreamableHTTPServerTransport> => {
     const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => sessionId,
     });
 
-    // Store transport in sessions object
+    // Store transport in memory for immediate use
     sessions[sessionId] = transport;
+    
+    // Mark this session as active in Redis
+    await redis.set(`mcp:session:${sessionId}:active`, 'true', 'EX', 86400); // 24 hour expiry
 
     // Setup cleanup when transport is closed
-    transport.onclose = () => {
+    transport.onclose = async () => {
         delete sessions[sessionId];
-        console.log(`Session ${sessionId} closed`);
+        await redis.del(`mcp:session:${sessionId}:active`);
+        console.log(`Session ${sessionId} closed and removed from Redis`);
     };
 
+    console.log(`Created new session ${sessionId} and stored in Redis`);
     return transport;
 };
 
 // Get transport by session ID
-export const getTransport = (
+export const getTransport = async (
     sessionId: string
-): StreamableHTTPServerTransport | undefined => {
-    return sessions[sessionId];
+): Promise<StreamableHTTPServerTransport | undefined> => {
+    console.log(`Looking for session ${sessionId}`);
+    
+    // First check in-memory cache
+    let transport = sessions[sessionId];
+    
+    if (transport) {
+        console.log(`Found transport for ${sessionId} in memory`);
+        return transport;
+    }
+    
+    // Check if session exists in Redis
+    const exists = await redis.exists(`mcp:session:${sessionId}:active`);
+    
+    if (exists) {
+        console.log(`Session ${sessionId} exists in Redis but not in memory, recreating...`);
+        // Session exists in Redis but not in memory (server restart?)
+        // Create a new transport with the same session ID
+        transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => sessionId,
+        });
+        
+        // Store it in memory
+        sessions[sessionId] = transport;
+        
+        // Refresh Redis TTL
+        await redis.expire(`mcp:session:${sessionId}:active`, 86400);
+        
+        return transport;
+    }
+    
+    console.log(`Session ${sessionId} not found in memory or Redis`);
+    return undefined;
 };
 
 // Get all active session IDs
-export const getActiveSessions = (): string[] => {
-    return Object.keys(sessions);
+export const getActiveSessions = async (): Promise<string[]> => {
+    // Get in-memory sessions
+    const memorySessionIds = Object.keys(sessions);
+    
+    // Get Redis sessions
+    const redisSessions = await redis.keys('mcp:session:*:active');
+    const redisSessionIds = redisSessions.map(key => {
+        // Extract session ID from key format "mcp:session:{id}:active"
+        const parts = key.split(':');
+        return parts[2];
+    });
+    
+    // Combine and deduplicate
+    return [...new Set([...memorySessionIds, ...redisSessionIds])];
 };

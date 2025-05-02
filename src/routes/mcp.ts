@@ -15,6 +15,15 @@ router.post('/', async (req: Request, res: Response) => {
         // Get session ID from header
         const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
+        console.log('Received headers:', req.headers);
+        console.log('Received body:', JSON.stringify(req.body));
+        console.log(
+            'isInitializeRequest check:',
+            isInitializeRequest(req.body)
+        );
+
+        console.log(`Received request with session ID: ${sessionId || 'none'}`);
+
         // Check for initialization request
         if (!sessionId && isInitializeRequest(req.body)) {
             // Create a new session ID
@@ -22,7 +31,7 @@ router.post('/', async (req: Request, res: Response) => {
             console.log(`Creating new session: ${newSessionId}`);
 
             // Create transport and connect to server
-            const transport = createTransport(newSessionId);
+            const transport = await createTransport(newSessionId);
             const server = createMcpServer();
             await server.connect(transport);
 
@@ -38,12 +47,14 @@ router.post('/', async (req: Request, res: Response) => {
 
         // For existing sessions
         if (sessionId) {
-            const transport = getTransport(sessionId);
+            const transport = await getTransport(sessionId);
 
             if (transport) {
                 console.log(`Using existing session: ${sessionId}`);
                 await transport.handleRequest(req, res, req.body);
                 return; // Important: return here to end the function
+            } else {
+                console.log(`No transport found for session: ${sessionId}`);
             }
         }
 
@@ -89,7 +100,7 @@ router.get('/', async (req: Request, res: Response) => {
         });
     }
 
-    const transport = getTransport(sessionId);
+    const transport = await getTransport(sessionId);
 
     if (!transport) {
         return res.status(400).json({
@@ -135,7 +146,7 @@ router.delete('/', async (req: Request, res: Response) => {
         });
     }
 
-    const transport = getTransport(sessionId);
+    const transport = await getTransport(sessionId);
 
     if (!transport) {
         return res.status(400).json({

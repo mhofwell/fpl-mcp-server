@@ -7,6 +7,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTools } from './tools';
 import { registerResources } from './resources';
 import { registerPrompts } from './prompts';
+import bodyParser from 'body-parser';
 
 const app = express();
 const port = config.port || 3001;
@@ -24,6 +25,7 @@ app.use(
 
 // Middleware
 app.use(express.json());
+app.use(bodyParser.json());
 
 // Routes
 app.get('/health', (req, res) => {
