@@ -8,8 +8,6 @@ import { registerTools } from './tools';
 import { registerResources } from './resources';
 import { registerPrompts } from './prompts';
 import bodyParser from 'body-parser';
-import { fplApiService } from './lib/fpl-api/service';
-import { cacheInvalidator } from './lib/fpl-api/cache-invalidator';
 
 const app = express();
 const port = config.port || 3001;
@@ -39,57 +37,9 @@ app.get('/health', (req, res) => {
 
 app.use('/mcp', mcpRouter);
 
-// Cache warming function - wrapped in a try/catch to prevent server failure
-async function warmCache() {
-    console.log('Starting cache warming process...');
-
-    try {
-        // Use the updateAllData method to warm the cache
-        await fplApiService.updateAllData();
-
-        // Run cache optimization to clean up stale data
-        await cacheInvalidator.optimizeLiveDataCaching();
-
-        console.log('Cache warming completed successfully');
-    } catch (error) {
-        console.error('Cache warming failed:', error);
-        // Important: We don't re-throw the error to ensure server startup continues
-    }
-}
-
-// Create MCP server
-export const createMcpServer = () => {
-    const server = new McpServer({
-        name: 'FPL-MCP-Server',
-        version: '1.0.0',
-    });
-
-    // Register all components
-    registerTools(server);
-    registerResources(server);
-    registerPrompts(server);
-
-    return server;
-};
-
-// Start server first
+// Start server
 const serverInstance = app.listen(port, () => {
     console.log(`FPL MCP Server running on port ${port}`);
-
-    // Only run cache warming after server is started
-    // This prevents cache warming from blocking server startup
-    setTimeout(async () => {
-        try {
-            // Warm the cache initially
-            await warmCache();
-
-            // Schedule periodic cache warming
-            const CACHE_WARM_INTERVAL = 30 * 60 * 1000; // 30 minutes
-            setInterval(warmCache, CACHE_WARM_INTERVAL);
-        } catch (error) {
-            console.error('Failed to setup cache warming:', error);
-        }
-    }, 2000); // Wait 2 seconds after server start
 });
 
 // Graceful shutdown
@@ -106,3 +56,18 @@ process.on('SIGINT', () => {
         console.log('HTTP server closed');
     });
 });
+
+// Create MCP server
+export const createMcpServer = () => {
+    const server = new McpServer({
+        name: 'FPL-MCP-Server',
+        version: '1.0.0',
+    });
+
+    // Register all components
+    registerTools(server);
+    registerResources(server);
+    registerPrompts(server);
+
+    return server;
+};
