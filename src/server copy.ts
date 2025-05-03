@@ -1,4 +1,4 @@
-// src/server.ts
+// fpl-mcp-server/src/server.ts
 import express from 'express';
 import cors from 'cors';
 import { config } from './config';
@@ -8,13 +8,14 @@ import { registerTools } from './tools';
 import { registerResources } from './resources';
 import { registerPrompts } from './prompts';
 import bodyParser from 'body-parser';
-import { fplApiService } from './lib/fpl-api/service';
 import { cacheInvalidator } from './lib/fpl-api/cache-invalidator';
+import { fplApiService } from './lib/fpl-api/service';
 
 const app = express();
 const port = config.port || 3001;
 
 // CORS middleware
+// In server.ts
 app.use(
     cors({
         origin: [
@@ -57,6 +58,11 @@ async function warmCache() {
     }
 }
 
+// Start server
+app.listen(port, () => {
+    console.log(`FPL MCP Server running on port ${port}`);
+});
+
 // Create MCP server
 export const createMcpServer = () => {
     const server = new McpServer({
@@ -71,38 +77,3 @@ export const createMcpServer = () => {
 
     return server;
 };
-
-// Start server first
-const serverInstance = app.listen(port, () => {
-    console.log(`FPL MCP Server running on port ${port}`);
-
-    // Only run cache warming after server is started
-    // This prevents cache warming from blocking server startup
-    setTimeout(async () => {
-        try {
-            // Warm the cache initially
-            await warmCache();
-
-            // Schedule periodic cache warming
-            const CACHE_WARM_INTERVAL = 30 * 60 * 1000; // 30 minutes
-            setInterval(warmCache, CACHE_WARM_INTERVAL);
-        } catch (error) {
-            console.error('Failed to setup cache warming:', error);
-        }
-    }, 2000); // Wait 2 seconds after server start
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received: closing HTTP server');
-    serverInstance.close(() => {
-        console.log('HTTP server closed');
-    });
-});
-
-process.on('SIGINT', () => {
-    console.log('SIGINT signal received: closing HTTP server');
-    serverInstance.close(() => {
-        console.log('HTTP server closed');
-    });
-});
