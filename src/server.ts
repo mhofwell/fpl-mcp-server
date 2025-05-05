@@ -16,7 +16,7 @@ const port = config.port || 3001;
 app.use(
     cors({
         origin: [
-            config.nextjsUrl,
+            `http://${process.env.NEXT_CLIENT_PRIVATE_URL}:${process.env.NEXT_CLIENT_PORT}`,
             'http://localhost:3000',
             'http://localhost:8080',
         ],
